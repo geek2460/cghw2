@@ -24,7 +24,7 @@ struct object_struct{
 } ;
 
 std::vector<object_struct> objects;//vertex array object,vertex buffer object and texture(color) for objs
-unsigned int program, program2;
+unsigned int program, program2 ,program3,program4;
 std::vector<int> indicesCount;//Number of indice of objs
 
 static void error_callback(int error, const char* description)
@@ -302,52 +302,78 @@ int main(int argc, char *argv[])
 	// load shader program
 	program = setup_shader(readfile("vs.txt").c_str(), readfile("fs.txt").c_str());
 	program2 = setup_shader(readfile("vs.txt").c_str(), readfile("fs.txt").c_str());
+	program3 = setup_shader(readfile("vs.txt").c_str(), readfile("fs.txt").c_str());
+	program4 = setup_shader(readfile("vs.txt").c_str(), readfile("fs.txt").c_str());
 
-	int sun = add_obj(program, "sun.obj","sun.bmp");
-	int earth = add_obj(program2, "earth.obj","earth.bmp");
+	int sun = add_obj(program, "obj_texture/sun.obj","obj_texture/sun.bmp");
+	int earth = add_obj(program2, "obj_texture/earth.obj","obj_texture/earth.bmp");
+	int moon = add_obj(program3, "obj_texture/moon.obj","obj_texture/moon.bmp");
+	int mercury = add_obj(program4, "obj_texture/mercury.obj","obj_texture/mercury.bmp");
+
 
 	glEnable(GL_DEPTH_TEST);
-	 glCullFace(GL_BACK);
+	glCullFace(GL_BACK);
 	// Enable blend mode for billboard
 	//glEnable(GL_BLEND);
 	//glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-	setUniformMat4(program, "vp", glm::perspective(glm::radians(45.0f), 640.0f/480, 1.0f, 100.f)*
-			glm::lookAt(glm::vec3(20.0f), glm::vec3(), glm::vec3(0, 0, 1))*glm::mat4(10.0f));
-	setUniformMat4(program2, "vp",  glm::perspective(glm::radians(45.0f), 640.0f/480, 1.0f, 100.f)*
-	                       glm::lookAt(glm::vec3(20.0f), glm::vec3(), glm::vec3(0, 0, 1))*glm::mat4(10.0f));
+	glm::mat4 view,perspective;
+	view = glm::lookAt(glm::vec3(0.0f, 10.0f, 30.0f), 
+	  		   glm::vec3(0.0f, 0.0f, 0.0f), 
+			   glm::vec3(0.0f, 1.0f, 0.0f));
+	perspective = glm::perspective(45.0f, 640.0f/480, 1.0f, 100.f);
 
-	
-	//glm::mat4 tl=glm::translate(glm::mat4(),glm::vec3(0.0f,0.0f,-5.0f));
-	//setUniformMat4(program, "transform", tl);
+	setUniformMat4(program, "view", view);
+	setUniformMat4(program2, "view", view);
+	setUniformMat4(program3, "view", view);
+	setUniformMat4(program4, "view", view);
 
-	//glm::mat4 rot = glm::rotate(tl, 90.0f, glm::vec3(0.0f, 0.0f, 1.0f));
+	setUniformMat4(program, "projection",perspective);
+	setUniformMat4(program2, "projection",perspective);
+	setUniformMat4(program3, "projection",perspective);
+	setUniformMat4(program4, "projection",perspective);
+
+
 	glm::mat4 rev;
 
 
 	float last, start, model_shader_delay;
 	last = start = glfwGetTime();
 	int fps=0;
-	objects[sun].model = glm::translate(glm::mat4(), glm::vec3(0.0f,0.0f,0.0f));
-	//objects[earth].model =  glm::translate(glm::mat4(), glm::vec3(0.85f,0.0f,0.0f));
-
-	setUniformMat4(objects[sun].program, "model",  objects[sun].model);
-	setUniformMat4(objects[earth].program, "model",  objects[earth].model);
 
 
 	while (!glfwWindowShouldClose(window))
 	{//program will keep draw here until you close the window
 
-		if(glfwGetTime() - model_shader_delay > 0.01)
-		{
-			GLfloat angle = (float)glfwGetTime()*PI/180.0f;
-			objects[earth].model =  glm::rotate(glm::mat4(),angle*365.0f,glm::vec3(0.0f,0.0f,1.0f));
 
-			objects[earth].model =  glm::translate(objects[earth].model,
-				glm::vec3(cos(angle),sin(angle),0.0f));
-			setUniformMat4(objects[earth].program, "model",  objects[earth].model);
-			model_shader_delay = glfwGetTime();
+		GLfloat angle = (float)glfwGetTime()*PI/180.0f*50;
+
+		
+		//sun movement matrix
+		objects[sun].model =  glm::rotate(objects[sun].model,angle/5,glm::vec3(0.0f,1.0f,0.0f));
+		
+		//earth movement matrix
+
+		objects[earth].model =  glm::translate(objects[earth].model,glm::vec3(20.0f*cos(angle),0.0f,10.0f*sin(angle)));
+		objects[earth].model =  glm::rotate(objects[earth].model,10.0f,glm::vec3(0.0f,0.0f,1.0f));
+		objects[earth].model =  glm::rotate(objects[earth].model,angle*10,glm::vec3(0.0f,1.0f,0.0f));
+		
+		//moon movement matrix
+		objects[moon].model =  glm::translate(objects[moon].model,glm::vec3(2.0f*cos(angle*10),0.0f,2.0f*sin(angle*10)));
+		objects[moon].model =  glm::translate(objects[moon].model,glm::vec3(20.0f*cos(angle),0.0f,10.0f*sin(angle)));
+		objects[moon].model =  glm::rotate(objects[moon].model,-angle*10,glm::vec3(0.0f,1.0f,0.0f));
+		                 
+		//mercury movement
+		objects[mercury].model =  glm::translate(objects[mercury].model,glm::vec3(10.0f*cos(angle+90),0.0f,5.0f*sin(angle+90)));
+		//sent model matrix to shader program
+		for(int i=0;i<objects.size();i++)
+		{
+			setUniformMat4(objects[i].program, "model",  objects[i].model);
+			objects[i].model = glm::mat4();
 		}
+
+
+
 		float delta = glfwGetTime() - start;
 		render();
 		glfwSwapBuffers(window);
