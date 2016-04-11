@@ -13,6 +13,7 @@
 
 #define GLM_FORCE_RADIANS
 #define PI 3.145926
+#define OBJ_SIZE 6
 
 struct object_struct{
 	unsigned int program;
@@ -23,19 +24,77 @@ struct object_struct{
 	object_struct(): model(glm::mat4(1.0f)){}
 } ;
 
+// Window dimensions
+const GLuint WIDTH = 800, HEIGHT = 600;
+
+// Camera
+glm::vec3 cameraPos   = glm::vec3(0.0f, 15.0f,  40.0f);
+glm::vec3 cameraFront = glm::vec3(0.0f, -15.0f, -40.0f);
+glm::vec3 cameraUp    = glm::vec3(0.0f, 1.0f,  0.0f);
+GLfloat yaw    = -90.0f;	// Yaw is initialized to -90.0 degrees since a yaw of 0.0 results in a direction vector pointing to the right (due to how Eular angles work) so we initially rotate a bit to the left.
+GLfloat pitch  =  0.0f;
+GLfloat lastX  =  WIDTH  / 2.0;
+GLfloat lastY  =  HEIGHT / 2.0;
+GLfloat fov =  45.0f;
+bool keys[1024];
+// Deltatime
+GLfloat delta = 0.0f;	// Time between current frame and last frame in 1 sec for calculate FPS
+GLfloat last = 0.0f,start = 0.0f;  	// Time of last frame in 1 sec for calculate FPS
+
+GLfloat deltaframe = 0.0f;   // Time between current frame and last frame no delay to calculate animate movement
+GLfloat lastframe = 0.0f;       // Time of last frame no delay  to calculate animate movement
+
+
+
 std::vector<object_struct> objects;//vertex array object,vertex buffer object and texture(color) for objs
-unsigned int program, program2 ,program3,program4;
+unsigned int program[OBJ_SIZE];
 std::vector<int> indicesCount;//Number of indice of objs
 
 static void error_callback(int error, const char* description)
 {
 	fputs(description, stderr);
 }
+
+//key in event to set corresponse label
 static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
 	if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
 		glfwSetWindowShouldClose(window, GL_TRUE);
+	if (key >= 0 && key < 1024)
+	{
+		if (action == GLFW_PRESS)
+			keys[key] = true;
+		else if (action == GLFW_RELEASE)
+			keys[key] = false;
+	}
 }
+
+//move camera
+void do_movement()
+{
+	// Camera controls
+	GLfloat cameraSpeed = 5.0f*deltaframe;
+	if (keys[GLFW_KEY_W])
+		cameraPos.y -= cameraSpeed * cameraFront.y/5;
+	if (keys[GLFW_KEY_S])
+		cameraPos.y += cameraSpeed * cameraFront.y/5;
+	if (keys[GLFW_KEY_A])
+		cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+	if (keys[GLFW_KEY_D])
+		cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+}
+
+//zoom in/out camera
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
+{
+	if (fov >= 1.0f && fov <= 45.0f)
+		fov -= yoffset*deltaframe;
+	if (fov <= 1.0f)
+		fov = 1.0f;
+	if (fov >= 45.0f)
+		fov = 45.0f;
+}
+
 
 static unsigned int setup_shader(const char *vertex_shader, const char *fragment_shader)
 {
@@ -238,8 +297,8 @@ static void releaseObjects()
 		glDeleteVertexArrays(1, &objects[i].vao);
 		glDeleteTextures(1, &objects[i].texture);
 		glDeleteBuffers(4, objects[i].vbo);
+		glDeleteProgram(program[i]);
 	}
-	glDeleteProgram(program);
 }
 
 static void setUniformMat4(unsigned int program, const std::string &name, const glm::mat4 &mat)
@@ -298,17 +357,19 @@ int main(int argc, char *argv[])
 
 	// Setup input callback
 	glfwSetKeyCallback(window, key_callback);
-
+	//glfwSetCursorPosCallback(window, mouse_callback);
+	glfwSetScrollCallback(window, scroll_callback);
+	
 	// load shader program
-	program = setup_shader(readfile("vs.txt").c_str(), readfile("fs.txt").c_str());
-	program2 = setup_shader(readfile("vs.txt").c_str(), readfile("fs.txt").c_str());
-	program3 = setup_shader(readfile("vs.txt").c_str(), readfile("fs.txt").c_str());
-	program4 = setup_shader(readfile("vs.txt").c_str(), readfile("fs.txt").c_str());
+	for(int i=0; i < OBJ_SIZE ; i++)
+		program[i] = setup_shader(readfile("vs.txt").c_str(), readfile("fs.txt").c_str());
 
-	int sun = add_obj(program, "obj_texture/sun.obj","obj_texture/sun.bmp");
-	int earth = add_obj(program2, "obj_texture/earth.obj","obj_texture/earth.bmp");
-	int moon = add_obj(program3, "obj_texture/moon.obj","obj_texture/moon.bmp");
-	int mercury = add_obj(program4, "obj_texture/mercury.obj","obj_texture/mercury.bmp");
+	int sun = add_obj(program[0], "obj_texture/sun.obj","obj_texture/sun.bmp");
+	int earth = add_obj(program[1], "obj_texture/earth.obj","obj_texture/earth.bmp");
+	int moon = add_obj(program[2], "obj_texture/moon.obj","obj_texture/moon.bmp");
+	int mercury = add_obj(program[3], "obj_texture/mercury.obj","obj_texture/mercury.bmp");
+	int venus = add_obj(program[4], "obj_texture/venus.obj","obj_texture/venus.bmp");
+	int mars = add_obj(program[5], "obj_texture/mars.obj","obj_texture/mars.bmp");
 
 
 	glEnable(GL_DEPTH_TEST);
@@ -317,27 +378,10 @@ int main(int argc, char *argv[])
 	//glEnable(GL_BLEND);
 	//glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-	glm::mat4 view,perspective;
-	view = glm::lookAt(glm::vec3(0.0f, 10.0f, 30.0f), 
-	  		   glm::vec3(0.0f, 0.0f, 0.0f), 
-			   glm::vec3(0.0f, 1.0f, 0.0f));
-	perspective = glm::perspective(45.0f, 640.0f/480, 1.0f, 100.f);
-
-	setUniformMat4(program, "view", view);
-	setUniformMat4(program2, "view", view);
-	setUniformMat4(program3, "view", view);
-	setUniformMat4(program4, "view", view);
-
-	setUniformMat4(program, "projection",perspective);
-	setUniformMat4(program2, "projection",perspective);
-	setUniformMat4(program3, "projection",perspective);
-	setUniformMat4(program4, "projection",perspective);
-
 
 	glm::mat4 rev;
 
 
-	float last, start, model_shader_delay;
 	last = start = glfwGetTime();
 	int fps=0;
 
@@ -346,25 +390,65 @@ int main(int argc, char *argv[])
 	{//program will keep draw here until you close the window
 
 
-		GLfloat angle = (float)glfwGetTime()*PI/180.0f*50;
+		GLfloat currentFrame = glfwGetTime();
+		deltaframe = currentFrame - lastframe;
+		lastframe = currentFrame;
 
+		render();
+		glfwSwapBuffers(window);
+		glfwPollEvents();
+
+		//show the FPS
+		delta = glfwGetTime() - start;
+		fps++;
+		if(glfwGetTime() - last > 1.0)
+		{
+			std::cout<<(double)fps/(glfwGetTime()-last)<<std::endl;
+			fps = 0;
+			last = glfwGetTime();
+		}
+		do_movement();
+
+		//set camera/view transform
+		glm::mat4 view;
+		view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+		// Projection 
+		glm::mat4 projection;
+		projection = glm::perspective(fov, (GLfloat)WIDTH/(GLfloat)HEIGHT, 0.1f, 100.0f);  
 		
+		for(int i=0;i<objects.size();i++)
+		{
+			setUniformMat4(program[i], "view", view);
+			setUniformMat4(program[i], "projection",projection);
+		}
+
+		GLfloat angle = -(float)glfwGetTime()*PI/180.0f*50;
+
 		//sun movement matrix
-		objects[sun].model =  glm::rotate(objects[sun].model,angle/5,glm::vec3(0.0f,1.0f,0.0f));
-		
-		//earth movement matrix
+		objects[sun].model =  glm::rotate(objects[sun].model,-angle/5,glm::vec3(0.0f,1.0f,0.0f));
 
+		//earth movement matrix
 		objects[earth].model =  glm::translate(objects[earth].model,glm::vec3(20.0f*cos(angle),0.0f,10.0f*sin(angle)));
 		objects[earth].model =  glm::rotate(objects[earth].model,10.0f,glm::vec3(0.0f,0.0f,1.0f));
 		objects[earth].model =  glm::rotate(objects[earth].model,angle*10,glm::vec3(0.0f,1.0f,0.0f));
-		
+
 		//moon movement matrix
-		objects[moon].model =  glm::translate(objects[moon].model,glm::vec3(2.0f*cos(angle*10),0.0f,2.0f*sin(angle*10)));
+		objects[moon].model =  glm::translate(objects[moon].model,glm::vec3(2.0f*cos(angle*10),sin(angle*10)/2,2.0f*sin(angle*10)));
 		objects[moon].model =  glm::translate(objects[moon].model,glm::vec3(20.0f*cos(angle),0.0f,10.0f*sin(angle)));
 		objects[moon].model =  glm::rotate(objects[moon].model,-angle*10,glm::vec3(0.0f,1.0f,0.0f));
-		                 
+
 		//mercury movement
-		objects[mercury].model =  glm::translate(objects[mercury].model,glm::vec3(10.0f*cos(angle+90),0.0f,5.0f*sin(angle+90)));
+		objects[mercury].model =  glm::translate(objects[mercury].model,glm::vec3(10.0f*cos(angle*2+90),3.0f*sin(angle*2+90),5.0f*sin(angle*2+90)));
+		objects[mercury].model = glm::rotate(objects[mercury].model,angle*5,glm::vec3(0.0f,1.0f,0.0f));
+		
+		//venus movement
+		objects[venus].model =  glm::translate(objects[venus].model,glm::vec3(-3+15.0f*cos(angle*2.0f-45),2.0f*sin(angle*2.0f-45),10.0f*sin(angle*2.0f-45)));
+		objects[venus].model = glm::rotate(objects[venus].model,angle*10,glm::vec3(0.0f,1.0f,0.0f));
+
+		//mars movement
+		objects[mars].model =  glm::translate(objects[mars].model,glm::vec3(-5+25.0f*cos(angle+45),2.0f*sin(angle+45),20.0f*sin(angle+45)));
+		objects[mars].model = glm::rotate(objects[mars].model,angle*10,glm::vec3(0.0f,1.0f,0.0f));
+
 		//sent model matrix to shader program
 		for(int i=0;i<objects.size();i++)
 		{
@@ -374,17 +458,6 @@ int main(int argc, char *argv[])
 
 
 
-		float delta = glfwGetTime() - start;
-		render();
-		glfwSwapBuffers(window);
-		glfwPollEvents();
-		fps++;
-		if(glfwGetTime() - last > 1.0)
-		{
-			std::cout<<(double)fps/(glfwGetTime()-last)<<std::endl;
-			fps = 0;
-			last = glfwGetTime();
-		}
 	}
 
 	releaseObjects();
